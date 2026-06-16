@@ -21,7 +21,6 @@ const isProduction = process.env.NODE_ENV === 'production' || process.env.DATABA
 const pool = new Pool({
     connectionString: isProduction ? process.env.DATABASE_URL : undefined,
     ssl: isProduction ? { rejectUnauthorized: false } : false,
-    // หากทดสอบในเครื่องตัวเอง จะดึงค่าจาก .env
     user: isProduction ? undefined : process.env.DB_USER,
     password: isProduction ? undefined : process.env.DB_PASSWORD,
     host: isProduction ? undefined : process.env.DB_HOST,
@@ -29,7 +28,7 @@ const pool = new Pool({
     port: isProduction ? undefined : process.env.DB_PORT,
 });
 
-// ตรวจสอบการเชื่อมต่อตู้เซฟเมื่อเปิดระบบ
+// ตรวจสอบการเชื่อมต่อตู้เซฟ
 pool.connect((err, client, release) => {
     if (err) {
         console.error('❌ ไม่สามารถเชื่อมต่อตู้เซฟฐานข้อมูลได้:', err.stack);
@@ -78,7 +77,7 @@ app.get('/api/dashboard/charts', async (req, res) => {
 });
 
 // ==========================================
-// 📋 API 3: ทะเบียนครุภัณฑ์พร้อมระบบค้นหา Dynamic Search
+// 📋 API 3: ทะเบียนครุภัณฑ์พร้อมระบบค้นหา
 // ==========================================
 app.get('/api/equipments', async (req, res) => {
     try {
@@ -113,12 +112,67 @@ app.get('/api/equipments', async (req, res) => {
     }
 });
 
-// หากผู้ใช้พิมพ์เส้นทางอื่น ให้ดีดกลับไปที่หน้าแรกเสมอ (SPA Web App Support)
+// ==========================================
+// 👨‍💼 API 4: ดึงรายชื่อพนักงานทั้งหมด (สำหรับ Dropdown ตอนแก้ไข)
+// ==========================================
+app.get('/api/personnel', async (req, res) => {
+    try {
+        const query = `
+            SELECT id, first_name || ' ' || last_name as full_name 
+            FROM public.personnel 
+            ORDER BY first_name ASC
+        `;
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('API Error /personnel:', err.message);
+        res.status(500).json({ error: "ไม่สามารถดึงข้อมูลพนักงานได้" });
+    }
+});
+
+// ==========================================
+// ✏️ API 5: อัปเดตข้อมูลพัสดุ (Edit)
+// ==========================================
+app.put('/api/equipments/:asset_code', async (req, res) => {
+    const { asset_code } = req.params;
+    const { location, owner_id, status, notes } = req.body;
+    
+    try {
+        // หากไม่มีการเลือกเจ้าของ ให้บันทึกเป็น NULL
+        const finalOwnerId = owner_id ? parseInt(owner_id) : null;
+        
+        const updateQuery = `
+            UPDATE public.equipments
+            SET 
+                location = $1,
+                owner_id = $2,
+                status = $3,
+                notes = $4,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE asset_code = $5
+            RETURNING *;
+        `;
+        
+        const values = [location, finalOwnerId, status, notes, asset_code];
+        const result = await pool.query(updateQuery, values);
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "ไม่พบรหัสพัสดุนี้ในระบบ" });
+        }
+        
+        res.json({ message: "อัปเดตข้อมูลสำเร็จ", data: result.rows[0] });
+    } catch (err) {
+        console.error('API Error Update Equipment:', err.message);
+        res.status(500).json({ error: "เกิดข้อผิดพลาดในการบันทึกข้อมูล" });
+    }
+});
+
+// หากผู้ใช้พิมพ์เส้นทางอื่น ให้ส่งหน้าแรกไปให้เสมอ (SPA Support)
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// เริ่มต้นรันบริการหลังบ้าน
+// รันเซิร์ฟเวอร์
 app.listen(port, () => {
     console.log(`🚀 เซิร์ฟเวอร์ ITAM SMKCC รันออนไลน์แล้วที่พอร์ต ${port}`);
 });
