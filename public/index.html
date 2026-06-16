@@ -5,19 +5,58 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SMKCC - ระบบจัดการทรัพย์สินไอที (ITAM)</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Sarabun', sans-serif; }
-    </style>
+    <style>body { font-family: 'Sarabun', sans-serif; }</style>
+    <script>
+        function itamApp() {
+            return {
+                stats: {}, equipments: [], personnelList: [], searchQuery: '', chartInstance: null, isModalOpen: false,
+                editForm: { asset_code: '', location: '', status: '' },
+                async initSystem() { 
+                    await Promise.all([this.fetchStats(), this.fetchCharts(), this.fetchEquipments(), this.fetchPersonnel()]); 
+                },
+                async fetchStats() { 
+                    try { const res = await fetch('/api/dashboard/stats'); this.stats = await res.json(); } catch(e) {} 
+                },
+                async fetchCharts() {
+                    try {
+                        const res = await fetch('/api/dashboard/charts');
+                        const data = await res.json();
+                        if (this.chartInstance) this.chartInstance.destroy();
+                        this.chartInstance = new Chart(document.getElementById('categoryChart').getContext('2d'), {
+                            type: 'doughnut', data: { labels: data.categories.map(c => c.category), datasets: [{ data: data.categories.map(c => c.count), backgroundColor: ['#4f46e5', '#10b981'] }] }
+                        });
+                    } catch(e) {}
+                },
+                async fetchEquipments() { 
+                    try { const res = await fetch(`/api/equipments?search=${this.searchQuery}`); this.equipments = await res.json(); } catch(e) {}
+                },
+                async fetchPersonnel() { 
+                    try { const res = await fetch('/api/personnel'); this.personnelList = await res.json(); } catch(e) {}
+                },
+                openEditModal(item) { this.editForm = { ...item }; this.isModalOpen = true; },
+                async saveEquipment() {
+                    const res = await fetch(`/api/equipments/${this.editForm.asset_code}`, {
+                        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(this.editForm)
+                    });
+                    if (res.ok) {
+                        this.isModalOpen = false;
+                        await this.initSystem();
+                        Swal.fire('สำเร็จ', 'อัปเดตข้อมูลเรียบร้อย', 'success');
+                    }
+                }
+            }
+        }
+    </script>
 </head>
 <body x-data="itamApp()" x-init="initSystem()" class="bg-slate-50 text-gray-800 min-h-screen">
 
     <nav class="bg-slate-900 text-white shadow-lg sticky top-0 z-40">
         <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-            <h1 class="text-xl font-bold">ระบบจัดการทรัพย์สินไอที (ITAM)</h1>
+            <h1 class="text-xl font-bold">📦 ระบบจัดการทรัพย์สินไอที (ITAM)</h1>
             <span class="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-3 py-1 rounded-full text-xs font-semibold animate-pulse">Online</span>
         </div>
     </nav>
@@ -28,14 +67,26 @@
                 <p class="text-xs text-slate-400 font-bold uppercase">จำนวนทั้งหมด</p>
                 <p class="text-3xl font-extrabold text-slate-800 mt-2" x-text="(stats.total_assets || 0) + ' เครื่อง'"></p>
             </div>
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <p class="text-xs text-slate-400 font-bold uppercase">งบประมาณรวม</p>
+                <p class="text-3xl font-extrabold text-slate-800 mt-2" x-text="Number(stats.total_value || 0).toLocaleString() + ' ฿'"></p>
             </div>
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <p class="text-xs text-slate-400 font-bold uppercase">หมดประกัน</p>
+                <p class="text-3xl font-extrabold text-rose-600 mt-2" x-text="(stats.expired_warranty || 0) + ' เครื่อง'"></p>
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 w-full max-w-[300px]">
+            <h3 class="text-sm font-bold mb-4">สัดส่วนตามประเภท</h3>
+            <canvas id="categoryChart"></canvas>
+        </div>
 
         <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
             <div class="p-6 border-b border-slate-100 flex justify-between">
                 <h3 class="text-lg font-bold">📋 ทะเบียนข้อมูลพัสดุ</h3>
                 <input type="text" x-model="searchQuery" @input.debounce.300ms="fetchEquipments()" placeholder="ค้นหา..." class="border rounded-xl px-4 py-2 text-sm">
             </div>
-            
             <table class="w-full text-left">
                 <thead class="bg-slate-50 text-slate-500 text-xs uppercase">
                     <tr>
@@ -83,36 +134,5 @@
             </form>
         </div>
     </div>
-
-    <script>
-        function itamApp() {
-            return {
-                equipments: [],
-                isModalOpen: false,
-                editForm: { asset_code: '', location: '', status: '' },
-                async initSystem() { await this.fetchEquipments(); },
-                async fetchEquipments() {
-                    const res = await fetch('/api/equipments');
-                    this.equipments = await res.json();
-                },
-                openEditModal(item) {
-                    this.editForm = { ...item };
-                    this.isModalOpen = true;
-                },
-                async saveEquipment() {
-                    const res = await fetch(`/api/equipments/${this.editForm.asset_code}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(this.editForm)
-                    });
-                    if (res.ok) {
-                        this.isModalOpen = false;
-                        await this.fetchEquipments();
-                        Swal.fire('สำเร็จ', 'อัปเดตข้อมูลเรียบร้อยแล้ว', 'success');
-                    }
-                }
-            }
-        }
-    </script>
 </body>
 </html>
