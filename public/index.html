@@ -13,39 +13,35 @@
     <script>
         function itamApp() {
             return {
-                stats: {}, equipments: [], personnelList: [], searchQuery: '', chartInstance: null, isModalOpen: false,
-                editForm: { asset_code: '', location: '', status: '' },
-                async initSystem() { 
-                    await Promise.all([this.fetchStats(), this.fetchCharts(), this.fetchEquipments(), this.fetchPersonnel()]); 
+                stats: {}, equipments: [], searchQuery: '', isModalOpen: false, isEditMode: false,
+                editForm: { asset_code: '', category: '', brand: '', model: '', location: '', status: 'ใช้งานได้' },
+                
+                async initSystem() { await Promise.all([this.fetchStats(), this.fetchEquipments()]); },
+                async fetchStats() { try { const res = await fetch('/api/dashboard/stats'); this.stats = await res.json(); } catch(e) {} },
+                async fetchEquipments() { try { const res = await fetch(`/api/equipments?search=${this.searchQuery}`); this.equipments = await res.json(); } catch(e) {} },
+                
+                openAddModal() {
+                    this.isEditMode = false;
+                    this.editForm = { asset_code: '', category: 'คอมพิวเตอร์', brand: '', model: '', location: '', status: 'ใช้งานได้' };
+                    this.isModalOpen = true;
                 },
-                async fetchStats() { 
-                    try { const res = await fetch('/api/dashboard/stats'); this.stats = await res.json(); } catch(e) {} 
+                openEditModal(item) {
+                    this.isEditMode = true;
+                    this.editForm = { ...item };
+                    this.isModalOpen = true;
                 },
-                async fetchCharts() {
-                    try {
-                        const res = await fetch('/api/dashboard/charts');
-                        const data = await res.json();
-                        if (this.chartInstance) this.chartInstance.destroy();
-                        this.chartInstance = new Chart(document.getElementById('categoryChart').getContext('2d'), {
-                            type: 'doughnut', data: { labels: data.categories.map(c => c.category), datasets: [{ data: data.categories.map(c => c.count), backgroundColor: ['#4f46e5', '#10b981'] }] }
-                        });
-                    } catch(e) {}
-                },
-                async fetchEquipments() { 
-                    try { const res = await fetch(`/api/equipments?search=${this.searchQuery}`); this.equipments = await res.json(); } catch(e) {}
-                },
-                async fetchPersonnel() { 
-                    try { const res = await fetch('/api/personnel'); this.personnelList = await res.json(); } catch(e) {}
-                },
-                openEditModal(item) { this.editForm = { ...item }; this.isModalOpen = true; },
                 async saveEquipment() {
-                    const res = await fetch(`/api/equipments/${this.editForm.asset_code}`, {
-                        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(this.editForm)
+                    const method = this.isEditMode ? 'PUT' : 'POST';
+                    const url = this.isEditMode ? `/api/equipments/${this.editForm.asset_code}` : '/api/equipments';
+                    const res = await fetch(url, {
+                        method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(this.editForm)
                     });
                     if (res.ok) {
                         this.isModalOpen = false;
                         await this.initSystem();
-                        Swal.fire('สำเร็จ', 'อัปเดตข้อมูลเรียบร้อย', 'success');
+                        Swal.fire('สำเร็จ', 'บันทึกข้อมูลเรียบร้อย', 'success');
+                    } else {
+                        Swal.fire('ผิดพลาด', 'ไม่สามารถบันทึกข้อมูลได้', 'error');
                     }
                 }
             }
@@ -57,11 +53,14 @@
     <nav class="bg-slate-900 text-white shadow-lg sticky top-0 z-40">
         <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
             <h1 class="text-xl font-bold">📦 ระบบจัดการทรัพย์สินไอที (ITAM)</h1>
-            <span class="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-3 py-1 rounded-full text-xs font-semibold animate-pulse">Online</span>
+            <button @click="openAddModal()" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition">
+                <span>➕ เพิ่มพัสดุใหม่</span>
+            </button>
         </div>
     </nav>
 
     <main class="max-w-7xl mx-auto p-6 space-y-6">
+        <!-- Stats -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
                 <p class="text-xs text-slate-400 font-bold uppercase">จำนวนทั้งหมด</p>
@@ -77,20 +76,17 @@
             </div>
         </div>
 
-        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 w-full max-w-[300px]">
-            <h3 class="text-sm font-bold mb-4">สัดส่วนตามประเภท</h3>
-            <canvas id="categoryChart"></canvas>
-        </div>
-
+        <!-- Table -->
         <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-            <div class="p-6 border-b border-slate-100 flex justify-between">
+            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
                 <h3 class="text-lg font-bold">📋 ทะเบียนข้อมูลพัสดุ</h3>
                 <input type="text" x-model="searchQuery" @input.debounce.300ms="fetchEquipments()" placeholder="ค้นหา..." class="border rounded-xl px-4 py-2 text-sm">
             </div>
             <table class="w-full text-left">
                 <thead class="bg-slate-50 text-slate-500 text-xs uppercase">
                     <tr>
-                        <th class="p-4">รหัสพัสดุ</th>
+                        <th class="p-4">รหัส</th>
+                        <th class="p-4">อุปกรณ์</th>
                         <th class="p-4">สถานที่</th>
                         <th class="p-4">สถานะ</th>
                         <th class="p-4 text-center">จัดการ</th>
@@ -100,6 +96,7 @@
                     <template x-for="item in equipments" :key="item.asset_code">
                         <tr>
                             <td class="p-4 font-mono font-bold text-indigo-700" x-text="item.asset_code"></td>
+                            <td class="p-4" x-text="item.brand + ' ' + item.model"></td>
                             <td class="p-4" x-text="item.location"></td>
                             <td class="p-4" x-text="item.status"></td>
                             <td class="p-4 text-center">
@@ -112,24 +109,25 @@
         </div>
     </main>
 
+    <!-- Modal เพิ่ม/แก้ไข -->
     <div x-show="isModalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50">
-        <div class="bg-white rounded-2xl w-full max-w-lg p-6">
-            <h3 class="text-lg font-bold mb-4">แก้ไขข้อมูลพัสดุ</h3>
-            <form @submit.prevent="saveEquipment()" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-semibold">สถานที่ตั้ง</label>
-                    <input type="text" x-model="editForm.location" class="w-full border rounded-lg px-4 py-2">
+        <div class="bg-white rounded-2xl w-full max-w-lg p-6 space-y-4">
+            <h3 class="text-lg font-bold" x-text="isEditMode ? 'แก้ไขข้อมูลพัสดุ' : 'เพิ่มพัสดุใหม่'"></h3>
+            <form @submit.prevent="saveEquipment()" class="space-y-3">
+                <input type="text" x-model="editForm.asset_code" placeholder="รหัสครุภัณฑ์" :disabled="isEditMode" class="w-full border rounded-lg px-4 py-2" required>
+                <div class="grid grid-cols-2 gap-2">
+                    <input type="text" x-model="editForm.brand" placeholder="ยี่ห้อ" class="w-full border rounded-lg px-4 py-2" required>
+                    <input type="text" x-model="editForm.model" placeholder="รุ่น" class="w-full border rounded-lg px-4 py-2" required>
                 </div>
-                <div>
-                    <label class="block text-sm font-semibold">สถานะ</label>
-                    <select x-model="editForm.status" class="w-full border rounded-lg px-4 py-2">
-                        <option value="ใช้งานได้">ใช้งานได้</option>
-                        <option value="ส่งซ่อม">ส่งซ่อม</option>
-                    </select>
-                </div>
-                <div class="flex justify-end gap-2">
+                <input type="text" x-model="editForm.location" placeholder="สถานที่ตั้ง" class="w-full border rounded-lg px-4 py-2" required>
+                <select x-model="editForm.status" class="w-full border rounded-lg px-4 py-2">
+                    <option value="ใช้งานได้">ใช้งานได้</option>
+                    <option value="ส่งซ่อม">ส่งซ่อม</option>
+                    <option value="แทงจำหน่าย">แทงจำหน่าย</option>
+                </select>
+                <div class="flex justify-end gap-2 pt-2">
                     <button type="button" @click="isModalOpen = false" class="px-4 py-2 text-slate-600">ยกเลิก</button>
-                    <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-lg">บันทึก</button>
+                    <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-lg">บันทึกข้อมูล</button>
                 </div>
             </form>
         </div>
