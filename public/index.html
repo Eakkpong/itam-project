@@ -3,121 +3,113 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SMKCC - IT Asset Management</title>
+    <title>SMKCC - ระบบจัดการทรัพย์สินไอที (ITAM)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>body { font-family: 'Sarabun', sans-serif; }</style>
+    <style>
+        body { font-family: 'Sarabun', sans-serif; }
+    </style>
 </head>
-<body x-data="itamApp()" x-init="initSystem()" class="bg-gray-100 min-h-screen">
+<body x-data="itamApp()" x-init="initSystem()" class="bg-slate-50 text-gray-800 min-h-screen">
 
-    <nav class="bg-indigo-900 text-white p-4 shadow-md">
-        <div class="container mx-auto flex justify-between items-center">
-            <h1 class="text-xl font-bold tracking-wide">📦 ระบบจัดการทรัพย์สินไอที (ITAM) v1.0</h1>
-            <span class="bg-indigo-700 px-3 py-1 rounded-full text-xs">วิทยาลัยชุมชนสมุทรสาคร</span>
+    <nav class="bg-slate-900 text-white shadow-lg sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+            <h1 class="text-xl font-bold">ระบบจัดการทรัพย์สินไอที (ITAM)</h1>
+            <span class="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-3 py-1 rounded-full text-xs font-semibold animate-pulse">Online</span>
         </div>
     </nav>
 
-    <div class="container mx-auto p-6 space-y-6">
+    <main class="max-w-7xl mx-auto p-6 space-y-6">
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-blue-500">
-                <p class="text-sm text-gray-500 font-medium uppercase">จำนวนครุภัณฑ์ไอทีทั้งหมด</p>
-                <p class="text-3xl font-bold text-gray-800 mt-2" x-text="stats.total_assets || 0"></p>
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <p class="text-xs text-slate-400 font-bold uppercase">จำนวนทั้งหมด</p>
+                <p class="text-3xl font-extrabold text-slate-800 mt-2" x-text="(stats.total_assets || 0) + ' เครื่อง'"></p>
             </div>
-            <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-green-500">
-                <p class="text-sm text-gray-500 font-medium uppercase">มูลค่าสินทรัพย์รวม</p>
-                <p class="text-3xl font-bold text-gray-800 mt-2" x-text="Number(stats.total_value).toLocaleString() + ' บาท'"></p>
-            </div>
-            <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-red-500">
-                <p class="text-sm text-gray-500 font-medium uppercase">หมดระยะเวลารับประกัน</p>
-                <p class="text-3xl font-bold text-red-600 mt-2" x-text="stats.expired_warranty || 0"></p>
-            </div>
-        </div>
-
-        <div class="bg-white p-6 rounded-xl shadow-sm grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-            <div>
-                <h3 class="text-lg font-bold text-gray-800 mb-4">สัดส่วนครุภัณฑ์แยกตามประเภท</h3>
-                <div class="w-full max-w-[300px] mx-auto">
-                    <canvas id="categoryChart"></canvas>
-                </div>
-            </div>
-            <div class="space-y-2">
-                <h3 class="text-lg font-bold text-gray-800 mb-2">💡 คำแนะนำสถาปัตยกรรม</h3>
-                <p class="text-gray-600 text-sm leading-relaxed">ข้อมูลกราฟนี้ถูกดึงแบบ Dynamic มาจากฐานข้อมูล PostgreSQL โดยใช้คำสั่ง <code>GROUP BY category</code> ผ่านระบบหลังบ้าน Node.js ของคุณแบบ Real-time</p>
-            </div>
-        </div>
-
-        <div class="bg-white p-6 rounded-xl shadow-sm space-y-4">
-            <div class="flex flex-col md:flex-row justify-between items-md-center gap-4">
-                <h3 class="text-lg font-bold text-gray-800">📋 ทะเบียนคุมครุภัณฑ์คอมพิวเตอร์</h3>
-                <input type="text" x-model="searchQuery" @input.debounce.300ms="fetchEquipments()" placeholder="🔍 ค้นหารหัส, ประเภท, ห้อง, หรือชื่อผู้ครอง..." class="border rounded-lg px-4 py-2 w-full md:max-w-xs focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
 
-            <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse">
-                    <thead>
-                        <tr class="bg-gray-50 text-gray-600 text-sm uppercase font-semibold">
-                            <th class="p-3 border-b">รหัสครุภัณฑ์</th>
-                            <th class="p-3 border-b">ประเภท</th>
-                            <th class="p-3 border-b">ยี่ห้อ/รุ่น</th>
-                            <th class="p-3 border-b">สถานที่ตั้ง</th>
-                            <th class="p-3 border-b">ผู้รับผิดชอบ</th>
-                            <th class="p-3 border-b">สถานะ</th>
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <div class="p-6 border-b border-slate-100 flex justify-between">
+                <h3 class="text-lg font-bold">📋 ทะเบียนข้อมูลพัสดุ</h3>
+                <input type="text" x-model="searchQuery" @input.debounce.300ms="fetchEquipments()" placeholder="ค้นหา..." class="border rounded-xl px-4 py-2 text-sm">
+            </div>
+            
+            <table class="w-full text-left">
+                <thead class="bg-slate-50 text-slate-500 text-xs uppercase">
+                    <tr>
+                        <th class="p-4">รหัสพัสดุ</th>
+                        <th class="p-4">สถานที่</th>
+                        <th class="p-4">สถานะ</th>
+                        <th class="p-4 text-center">จัดการ</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <template x-for="item in equipments" :key="item.asset_code">
+                        <tr>
+                            <td class="p-4 font-mono font-bold text-indigo-700" x-text="item.asset_code"></td>
+                            <td class="p-4" x-text="item.location"></td>
+                            <td class="p-4" x-text="item.status"></td>
+                            <td class="p-4 text-center">
+                                <button @click="openEditModal(item)" class="bg-amber-100 text-amber-700 px-3 py-1 rounded-lg text-xs font-bold hover:bg-amber-200">แก้ไข</button>
+                            </td>
                         </tr>
-                    </thead>
-                    <tbody class="text-gray-700 text-sm divide-y">
-                        <template x-for="item in equipments" :key="item.asset_code">
-                            <tr class="hover:bg-gray-50 transition">
-                                <td class="p-3 font-mono text-indigo-600 font-bold" x-text="item.asset_code"></td>
-                                <td class="p-3" x-text="item.category"></td>
-                                <td class="p-3" x-text="item.brand + ' ' + (item.model !== '-' ? item.model : '')"></td>
-                                <td class="p-3" x-text="item.location"></td>
-                                <td class="p-3 font-medium" x-text="item.owner_name || '📦 ส่วนกลาง/ในคลัง'"></td>
-                                <td class="p-3">
-                                    <span :class="item.status === 'ใช้งานได้' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'" class="px-2 py-1 rounded-full text-xs font-bold" x-text="item.status"></span>
-                                </td>
-                            </tr>
-                        </template>
-                    </tbody>
-                </table>
-            </div>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <div x-show="isModalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50">
+        <div class="bg-white rounded-2xl w-full max-w-lg p-6">
+            <h3 class="text-lg font-bold mb-4">แก้ไขข้อมูลพัสดุ</h3>
+            <form @submit.prevent="saveEquipment()" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-semibold">สถานที่ตั้ง</label>
+                    <input type="text" x-model="editForm.location" class="w-full border rounded-lg px-4 py-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold">สถานะ</label>
+                    <select x-model="editForm.status" class="w-full border rounded-lg px-4 py-2">
+                        <option value="ใช้งานได้">ใช้งานได้</option>
+                        <option value="ส่งซ่อม">ส่งซ่อม</option>
+                    </select>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" @click="isModalOpen = false" class="px-4 py-2 text-slate-600">ยกเลิก</button>
+                    <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-lg">บันทึก</button>
+                </div>
+            </form>
         </div>
     </div>
 
     <script>
         function itamApp() {
             return {
-                stats: {},
                 equipments: [],
-                searchQuery: '',
-                chartInstance: null,
-                async initSystem() {
-                    await this.fetchStats();
-                    await this.fetchCharts();
-                    await this.fetchEquipments();
-                },
-                async fetchStats() {
-                    this.stats = await (await fetch('/api/dashboard/stats')).json();
-                },
+                isModalOpen: false,
+                editForm: { asset_code: '', location: '', status: '' },
+                async initSystem() { await this.fetchEquipments(); },
                 async fetchEquipments() {
-                    this.equipments = await (await fetch(`/api/equipments?search=${this.searchQuery}`)).json();
+                    const res = await fetch('/api/equipments');
+                    this.equipments = await res.json();
                 },
-                async fetchCharts() {
-                    const data = await (await fetch('/api/dashboard/charts')).json();
-                    const labels = data.categories.map(c => t = c.category);
-                    const counts = data.categories.map(c => c.count);
-
-                    if (this.chartInstance) this.chartInstance.destroy();
-                    const ctx = document.getElementById('categoryChart').getContext('2d');
-                    this.chartInstance = new Chart(ctx, {
-                        type: 'doughnut',
-                        data: {
-                            labels: labels,
-                            datasets: [{ data: counts, backgroundColor: ['#4f46e5', '#10b981', '#f59e0b'] }]
-                        },
-                        options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+                openEditModal(item) {
+                    this.editForm = { ...item };
+                    this.isModalOpen = true;
+                },
+                async saveEquipment() {
+                    const res = await fetch(`/api/equipments/${this.editForm.asset_code}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(this.editForm)
                     });
+                    if (res.ok) {
+                        this.isModalOpen = false;
+                        await this.fetchEquipments();
+                        Swal.fire('สำเร็จ', 'อัปเดตข้อมูลเรียบร้อยแล้ว', 'success');
+                    }
                 }
             }
         }
